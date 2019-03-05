@@ -23,6 +23,7 @@ app.post('/readings', db.importReadings);
 app.post('/patients', db.importPatients);
 app.get('/columns', db.getColumns)
 app.get('/column', db.getColumnsName)
+app.get('/patient', db.getPatient)
 
 
 

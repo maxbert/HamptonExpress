@@ -12,6 +12,10 @@ const client = new CosmosClient({ endpoint, auth: { masterKey } });
 async function getReadings(req, res, next){
   const {database, readings, patients} = await init();
 
+  if(req.query.start && req.query.end && parseInt(req.query.start) < parseInt(req.query.end)){
+    res.status(400).json({message:"end must be less than start"})
+  }
+
   if(!req.query.column_name){
   const querySpec = {
     query: "SELECT * FROM readings where readings.days_before <= @start and readings.days_before >= @end",
@@ -48,6 +52,12 @@ async function getReadings(req, res, next){
         patients:ret
       })
     }else{
+
+      var columns = await getColumnsHelper()
+
+      if(!columns.includes(req.query.column_name)){
+        res.status(400).json({message:"column_name " + req.query.column_name + " does not exist"})
+      }
       const patientYesQuery = {
         query: "SELECT p.Unique_ID from p where p." + req.query.column_name + "=1"
       }
@@ -164,11 +174,25 @@ async function getColumns(req, res, next){
       })
 }
 
+async function getColumnsHelper(){
+  const {database, readings, patients} = await init();
+  const querySpec = {
+    query: "SELECT top 1 * FROM patients"
+  };
+  const { result: itemDefList } = await patients.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
+  return Object.keys(itemDefList[0])
+}
 
 async function getColumnsName(req, res, next){
-  console.log("FGETITNG ICOLU")
   const {database, readings, patients} = await init();
-  var column = req.query.column_name?req.query.column_name:"ObstetricHistory_AddedDate"
+  var column = req.query.column_name
+
+  if(!req.query.column_name){
+
+    res.status(400)
+
+        .json({message:"column_name missing"})
+  }
   const querySpec = {
     query: "SELECT patients.Unique_ID, "+ "patients." + column + " FROM patients"
   };
@@ -176,24 +200,43 @@ async function getColumnsName(req, res, next){
     const { result: itemDefList } = await patients.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
 
   const key = req.query.column_name?req.query.column_name:"Unique_ID"
+  var retObj = {}
+  retObj[key]= itemDefList
   res.status(200)
-      .json({
-        key:itemDefList
-        })
+
+      .json(retObj)
 }
 
-
-
 async function importReadings(req, res, next){
+  if(!req.body["patients"]){
+    res.status(400).json({message:"missing column patients"})
+    return
+  }
   var newReadings = req.body["patients"]
-  const {database, readings, patients} = await init();
-  console.log(newReadings)
 
+  for(var i in newReadings){
+    for(var j in newReadings[i]["readings"][j]){
+      console.log(newReadings[i]["readings"][j])
+
+    }
+  }
+
+  const {database, readings, patients} = await init();
   var dataToAdd = []
 
   for (var i in newReadings) {
     var id = newReadings[i]["id"]
     for (var j in newReadings[i]["readings"]){
+      console.log(newReadings[i]["readings"][j])
+      console.log(newReadings[i]["id"])
+      if(!Number.isInteger(newReadings[i]["readings"][j]["sbp"])
+       || !Number.isInteger(newReadings[i]["readings"][j]["dbp"])
+       || !Number.isInteger(newReadings[i]["readings"][j]["days_before"])
+       || !newReadings[i]["readings"][j]["date"]
+       || !newReadings[i]["id"]){
+        res.status(400).json({message:" data improperlly formatted on for item number " + i + " reading number " + j })
+        return
+      }
       newReadings[i]["readings"][j]["patient_id"] = id
       newReadings[i]["readings"][j]["partitionKey"] = id + "-" + newReadings[i]["readings"][j]["days_before"]
       dataToAdd.push(newReadings[i]["readings"][j])
@@ -211,6 +254,30 @@ async function importReadings(req, res, next){
 
 }
 
+async function getPatient(req, res, next){
+
+  const {database, readings, patients} = await init();
+  var id = req.query.id
+  const queryMetrics = {
+    query: 'SELECT * FROM patients where patients.Unique_ID=' + id
+  };
+  const queryReadings = {
+    query: 'select * from readings where readings.patient_id="' + id + '"'
+  }
+
+  const { result: metricList } = await patients.items.query(queryMetrics, { enableCrossPartitionQuery: true }).toArray();
+  const { result: readingsList } = await readings.items.query(queryReadings, { enableCrossPartitionQuery: true }).toArray();
+
+  if(metricList.length > 0){
+  metricList[0]["readings"]= readingsList
+  res.status(200)
+
+      .json(metricList[0])
+    }else{
+      res.status(400)
+          .json({message:"id does not exist"})
+    }
+}
 
 async function importPatients(req, res, next){
   var newPatients = req.body["patients"]
@@ -240,5 +307,6 @@ module.exports = {
   importReadings: importReadings,
   importPatients: importPatients,
   getColumns: getColumns,
-  getColumnsName: getColumnsName
+  getColumnsName: getColumnsName,
+  getPatient: getPatient,
 }
