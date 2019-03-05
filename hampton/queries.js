@@ -11,6 +11,8 @@ const client = new CosmosClient({ endpoint, auth: { masterKey } });
 
 async function getReadings(req, res, next){
   const {database, readings, patients} = await init();
+
+  if(!req.query.column_name){
   const querySpec = {
     query: "SELECT * FROM readings where readings.days_before <= @start and readings.days_before >= @end",
     parameters: [
@@ -45,6 +47,109 @@ async function getReadings(req, res, next){
       .json({
         patients:ret
       })
+    }else{
+      const patientYesQuery = {
+        query: "SELECT p.Unique_ID from p where p." + req.query.column_name + "=1"
+      }
+      const { result: patientYesList } = await patients.items.query(patientYesQuery, { enableCrossPartitionQuery: true }).toArray();
+
+      const patientNoQuery = {
+        query: "SELECT p.Unique_ID from p where p." + req.query.column_name + "=0"
+      }
+
+      const { result: patientNoList } = await patients.items.query(patientNoQuery, { enableCrossPartitionQuery: true }).toArray();
+      var yesList='('
+      var noList='('
+      for (var i in patientYesList) {
+        yesList += '"' +  patientYesList[i]["Unique_ID"] + '",'
+      }
+      yesList = yesList.slice(0, -1)
+      yesList += ')'
+
+      for (var i in patientNoList) {
+        noList += '"' + patientNoList[i]["Unique_ID"] + '",'
+      }
+      noList = noList.slice(0,-1)
+      noList += ")"
+
+      const queryYesSpec = {
+        query: "SELECT * FROM readings where readings.days_before <= @start and readings.days_before >= @end and readings.patient_id in " + yesList,
+        parameters: [
+          {
+            name: "@start",
+            value: req.query.start?parseInt(req.query.start):1000
+          },
+          {
+            name: "@end",
+            value: req.query.end?parseInt(req.query.end):0
+          }
+        ]
+      };
+
+      const queryNoSpec = {
+        query: "SELECT * FROM readings where readings.days_before <= @start and readings.days_before >= @end and readings.patient_id in " + noList,
+        parameters: [
+          {
+            name: "@start",
+            value: req.query.start?parseInt(req.query.start):1000
+          },
+          {
+            name: "@end",
+            value: req.query.end?parseInt(req.query.end):0
+          }
+
+        ]
+      };
+
+      const { result: itemYesList } = await readings.items.query(queryYesSpec, { enableCrossPartitionQuery: true }).toArray();
+
+      const { result: itemNoList } = await readings.items.query(queryNoSpec, { enableCrossPartitionQuery: true }).toArray();
+      console.log("6")
+      var yesIds = []
+      for (var i in itemYesList ) {
+        const reading = itemYesList[i]
+        console.log(reading["patient_id"])
+        if (!yesIds.includes(reading["patient_id"])) {
+          yesIds.push(reading["patient_id"])
+        }
+      }
+      var yesRet = [];
+      for (var id in yesIds){
+        var retObj = {
+          id:yesIds[id],
+          readings:itemYesList.filter(reading => reading['patient_id'] == yesIds[id])
+        }
+        retObj[req.query.column_name] = 1
+
+        yesRet.push(retObj)
+      }
+
+
+      var noIds = []
+      for (var i in itemNoList ) {
+        const reading = itemNoList[i]
+        console.log(reading["patient_id"])
+        if (!noIds.includes(reading["patient_id"])) {
+          noIds.push(reading["patient_id"])
+        }
+      }
+      var noRet = [];
+      for (var id in noIds){
+        var retObj = {
+          id:noIds[id],
+          readings:itemNoList.filter(reading => reading['patient_id'] == noIds[id])
+        }
+
+        retObj[req.query.column_name] = 0
+
+        noRet.push(retObj)
+      }
+      res.status(200)
+          .json({
+            yes_patients:yesRet,
+            no_patients:noRet
+          })
+    }
 }
 
 async function getColumns(req, res, next){
