@@ -68,22 +68,11 @@ async function getReadings(req, res, next){
       }
 
       const { result: patientNoList } = await patients.items.query(patientNoQuery, { enableCrossPartitionQuery: true }).toArray();
-      var yesList='('
-      var noList='('
-      for (var i in patientYesList) {
-        yesList += '"' +  patientYesList[i]["Unique_ID"] + '",'
-      }
-      yesList = yesList.slice(0, -1)
-      yesList += ')'
-
-      for (var i in patientNoList) {
-        noList += '"' + patientNoList[i]["Unique_ID"] + '",'
-      }
-      noList = noList.slice(0,-1)
-      noList += ")"
+      var yesList=patientYesList.map(patient => patient["Unique_ID"]).join(",")
+      var noList=patientNoList.map(patient => patient["Unique_ID"]).join(",")
 
       const queryYesSpec = {
-        query: "SELECT * FROM readings where readings.days_before <= @start and readings.days_before >= @end and readings.patient_id in " + yesList,
+        query: "SELECT * FROM readings where readings.days_before <= @start and readings.days_before >= @end and readings.patient_id in (" + yesList + ")",
         parameters: [
           {
             name: "@start",
@@ -97,7 +86,7 @@ async function getReadings(req, res, next){
       };
 
       const queryNoSpec = {
-        query: "SELECT * FROM readings where readings.days_before <= @start and readings.days_before >= @end and readings.patient_id in " + noList,
+        query: "SELECT * FROM readings where readings.days_before <= @start and readings.days_before >= @end and readings.patient_id in (" + noList + ")",
         parameters: [
           {
             name: "@start",
@@ -111,6 +100,7 @@ async function getReadings(req, res, next){
         ]
       };
 
+      console.log(yesList)
       const { result: itemYesList } = await readings.items.query(queryYesSpec, { enableCrossPartitionQuery: true }).toArray();
 
       const { result: itemNoList } = await readings.items.query(queryNoSpec, { enableCrossPartitionQuery: true }).toArray();
@@ -183,6 +173,15 @@ async function getColumnsHelper(){
   return Object.keys(itemDefList[0])
 }
 
+async function importReadingsHelper(){
+  const {database, readings, patients} = await init();
+  const querySpec = {
+    query: "SELECT readings.partitionKey FROM readings",
+  };
+  const { result: itemDefList } = await readings.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
+  return itemDefList.map(pkey => pkey["partitionKey"])
+}
+
 async function getColumnsName(req, res, next){
   const {database, readings, patients} = await init();
   var column = req.query.column_name
@@ -214,21 +213,15 @@ async function importReadings(req, res, next){
   }
   var newReadings = req.body["patients"]
 
-  for(var i in newReadings){
-    for(var j in newReadings[i]["readings"][j]){
-      console.log(newReadings[i]["readings"][j])
-
-    }
-  }
+//  var currentReadings = await  importReadingsHelper();
 
   const {database, readings, patients} = await init();
   var dataToAdd = []
+  var dataToUpdate = []
 
   for (var i in newReadings) {
     var id = newReadings[i]["id"]
     for (var j in newReadings[i]["readings"]){
-      console.log(newReadings[i]["readings"][j])
-      console.log(newReadings[i]["id"])
       if(!Number.isInteger(newReadings[i]["readings"][j]["sbp"])
        || !Number.isInteger(newReadings[i]["readings"][j]["dbp"])
        || !Number.isInteger(newReadings[i]["readings"][j]["days_before"])
@@ -237,15 +230,26 @@ async function importReadings(req, res, next){
         res.status(400).json({message:" data improperlly formatted on for item number " + i + " reading number " + j })
         return
       }
+      //if(!currentReadings.includes(id + "-" + newReadings[i]["readings"][j]["days_before"])){
       newReadings[i]["readings"][j]["patient_id"] = id
       newReadings[i]["readings"][j]["partitionKey"] = id + "-" + newReadings[i]["readings"][j]["days_before"]
       dataToAdd.push(newReadings[i]["readings"][j])
+    // }else{
+    //   dataToUpdate.push(newReadings[i]["readings"][j])
+    // }
     }
   }
 
   for(var i in dataToAdd){
-    const { body: upserted } = await readings.items.upsert(dataToAdd[i])
+    try{
+      const { body: upserted } = await readings.items.upsert(dataToAdd[i])
+    }catch(e){
+      console.log(e)
+    }
   }
+  // for(var i in dataToAdd){
+  //   const { body: upserted } = await readings.items.up(dataToAdd[i])
+  // }
 
   res.status(200)
       .json({
@@ -284,7 +288,11 @@ async function importPatients(req, res, next){
   const {database, readings, patients} = await init();
 
   for(var i in newPatients){
-    const { body: upserted } = await patients.items.upsert(newPatients[i])
+    try{
+      const { body: upserted } = await patients.items.upsert(newPatients[i])
+    }catch(e){
+      console.log(e)
+    }
   }
 
   res.status(200)
