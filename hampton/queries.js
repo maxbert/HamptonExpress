@@ -54,22 +54,25 @@ async function getReadings(req, res, next){
     }else{
 
       var columns = await getColumnsHelper()
+      var breakpoint = req.query.breakpoint?req.query.breakpoint:1
 
       if(!columns.includes(req.query.column_name)){
         res.status(400).json({message:"column_name " + req.query.column_name + " does not exist"})
       }
       const patientYesQuery = {
-        query: "SELECT p.Unique_ID from p where p." + req.query.column_name + "=1"
+        query: "SELECT p.Unique_ID from p where p." + req.query.column_name + " >= " + breakpoint
       }
-      const { result: patientYesList } = await patients.items.query(patientYesQuery, { enableCrossPartitionQuery: true }).toArray();
 
+
+      const { result: patientYesList } = await patients.items.query(patientYesQuery, { enableCrossPartitionQuery: true }).toArray();
       const patientNoQuery = {
-        query: "SELECT p.Unique_ID from p where p." + req.query.column_name + "=0"
+        query: "SELECT p.Unique_ID from p where p." + req.query.column_name + "< " + breakpoint
       }
 
       const { result: patientNoList } = await patients.items.query(patientNoQuery, { enableCrossPartitionQuery: true }).toArray();
-      var yesList=patientYesList.map(patient => patient["Unique_ID"]).join(",")
-      var noList=patientNoList.map(patient => patient["Unique_ID"]).join(",")
+      var yesList=patientYesList.map(patient => '"' + patient["Unique_ID"] +'"').join(",")
+
+      var noList=patientNoList.map(patient => '"' + patient["Unique_ID"] + '"').join(",")
 
       const queryYesSpec = {
         query: "SELECT * FROM readings where readings.days_before <= @start and readings.days_before >= @end and readings.patient_id in (" + yesList + ")",
@@ -99,16 +102,12 @@ async function getReadings(req, res, next){
 
         ]
       };
-
-      console.log(yesList)
       const { result: itemYesList } = await readings.items.query(queryYesSpec, { enableCrossPartitionQuery: true }).toArray();
 
       const { result: itemNoList } = await readings.items.query(queryNoSpec, { enableCrossPartitionQuery: true }).toArray();
-      console.log("6")
       var yesIds = []
       for (var i in itemYesList ) {
         const reading = itemYesList[i]
-        console.log(reading["patient_id"])
         if (!yesIds.includes(reading["patient_id"])) {
           yesIds.push(reading["patient_id"])
         }
@@ -119,7 +118,6 @@ async function getReadings(req, res, next){
           id:yesIds[id],
           readings:itemYesList.filter(reading => reading['patient_id'] == yesIds[id])
         }
-        retObj[req.query.column_name] = 1
 
         yesRet.push(retObj)
       }
@@ -128,7 +126,6 @@ async function getReadings(req, res, next){
       var noIds = []
       for (var i in itemNoList ) {
         const reading = itemNoList[i]
-        console.log(reading["patient_id"])
         if (!noIds.includes(reading["patient_id"])) {
           noIds.push(reading["patient_id"])
         }
@@ -140,7 +137,6 @@ async function getReadings(req, res, next){
           readings:itemNoList.filter(reading => reading['patient_id'] == noIds[id])
         }
 
-        retObj[req.query.column_name] = 0
 
         noRet.push(retObj)
       }
