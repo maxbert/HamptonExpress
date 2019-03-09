@@ -154,9 +154,15 @@ async function getColumns(req, res, next){
     query: "SELECT top 1 * FROM patients"
   };
   const { result: itemDefList } = await patients.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
+  var keys = Object.keys(itemDefList[0])
+  ret = {}
+  for(var i in keys){
+    ret[keys[i]] = typeof itemDefList[0][keys[i]]
+  }
+
   res.status(200)
       .json({
-        columns:Object.keys(itemDefList[0])
+        columns:ret
       })
 }
 
