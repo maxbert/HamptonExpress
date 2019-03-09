@@ -157,7 +157,11 @@ async function getColumns(req, res, next){
   var keys = Object.keys(itemDefList[0])
   ret = {}
   for(var i in keys){
-    ret[keys[i]] = typeof itemDefList[0][keys[i]]
+    if(itemDefList[0][keys[i]] == 1 || itemDefList[0][keys[i]] == 0){
+        ret[keys[i]] = "boolean"
+    }else{
+      ret[keys[i]] = typeof itemDefList[0][keys[i]]
+    }
   }
 
   res.status(200)
