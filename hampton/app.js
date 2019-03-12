@@ -3,6 +3,20 @@ var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
+var userdb = require('./db')
+var passport = require('passport');
+var Strategy = require('passport-http-bearer').Strategy;
+
+passport.use(new Strategy(
+  function(token, cb) {
+    userdb.users.findByToken(token, function(err, user) {
+      if (err) { return cb(err); }
+      if (!user) { return cb(null, false); }
+      return cb(null, user);
+    });
+  }));
+
+
 var app = express();
 
 
@@ -18,13 +32,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 var db = require('./queries');
 
-app.get('/readings', db.getReadings);
-app.post('/readings', db.importReadings);
-app.post('/patients', db.importPatients);
-app.get('/columns', db.getColumns)
-app.get('/column', db.getColumnsName)
-app.get('/patient', db.getPatient)
-app.get('/patients', db.getPatients)
+app.get('/readings', passport.authenticate('bearer', { session: false }), db.getReadings);
+app.post('/readings', passport.authenticate('bearer', { session: false }), db.importReadings);
+app.post('/patients',passport.authenticate('bearer', { session: false }), db.importPatients);
+app.get('/columns',passport.authenticate('bearer', { session: false }), db.getColumns)
+app.get('/column', passport.authenticate('bearer', { session: false }),db.getColumnsName)
+app.get('/patient', passport.authenticate('bearer', { session: false }),db.getPatient)
+app.get('/patients', passport.authenticate('bearer', { session: false }),db.getPatients)
 
 
 // catch 404 and forward to error handler
