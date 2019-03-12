@@ -24,7 +24,7 @@ app.post('/patients', db.importPatients);
 app.get('/columns', db.getColumns)
 app.get('/column', db.getColumnsName)
 app.get('/patient', db.getPatient)
-
+app.get('/patients', db.getPatients)
 
 
 // catch 404 and forward to error handler

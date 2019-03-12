@@ -289,6 +289,28 @@ async function getPatient(req, res, next){
     }
 }
 
+
+async function getPatients(req, res, next){
+
+  const {database, readings, patients} = await init();
+  var id = req.query.id
+  const queryMetrics = {
+    query: 'SELECT * FROM patients'
+  };
+
+  const { result: metricList } = await patients.items.query(queryMetrics, { enableCrossPartitionQuery: true }).toArray();
+
+  if(metricList.length > 0){
+
+    res.status(200)
+
+        .json({patients:metricList})
+      }else{
+      res.status(400)
+          .json({message:"no patients exist"})
+    }
+}
+
 async function importPatients(req, res, next){
   var newPatients = req.body["patients"]
   const {database, readings, patients} = await init();
@@ -323,4 +345,5 @@ module.exports = {
   getColumns: getColumns,
   getColumnsName: getColumnsName,
   getPatient: getPatient,
+  getPatients : getPatients
 }
