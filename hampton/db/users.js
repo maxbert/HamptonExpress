@@ -1,15 +1,35 @@
-var records = [
-    { id: 1, username: 'tester1', token: '123456789', displayName: 'Jack', emails: [ { value: 'jack@example.com' } ] }
-  , { id: 2, username: 'jill', token: 'abcdefghi', displayName: 'Jill', emails: [ { value: 'jill@example.com' } ] }
-];
+const cosmos = require("@azure/cosmos");
+const CosmosClient = cosmos.CosmosClient;
+const config = require("../config");
+const databaseId = 'Hampton';
+const util = require('util');
+const endpoint = config.connection.endpoint;
+const masterKey = config.connection.authKey;
+const client = new CosmosClient({ endpoint, auth: { masterKey } });
 
-exports.findByToken = function(token, cb) {
-  process.nextTick(function() {
-    for (var i = 0, len = records.length; i < len; i++) {
-      var record = records[i];
-      if (record.token === token) {
-        return cb(null, record);
+
+async function init(){
+  const database = await client.databases.createIfNotExists({ id: databaseId });
+  const users = await database.database.container('users');
+  return {database, users}
+}
+
+exports.findByToken = async function(token, cb) {
+  const {database, users} = await init();
+  const querySpec = {
+    query: "SELECT * FROM users where users.token = @token",
+    parameters: [
+      {
+        name: "@token",
+        value: token
       }
+
+    ]
+  };
+  const { result: userz } = await users.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
+  process.nextTick(function() {
+    if(userz.length > 0){
+      return cb(null, userz[0])
     }
     return cb(null, null);
   });
