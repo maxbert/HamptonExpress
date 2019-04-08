@@ -39,7 +39,12 @@ app.get('/columns',passport.authenticate('bearer', { session: false }), db.getCo
 app.get('/column', passport.authenticate('bearer', { session: false }),db.getColumnsName)
 app.get('/patient', passport.authenticate('bearer', { session: false }),db.getPatient)
 app.get('/patients', passport.authenticate('bearer', { session: false }),db.getPatients)
-
+////////
+// app.delete('/patients', passport.authenticate('bearer', {session: false}), db.deletePatient)
+// app.update('/patients', passport.authenticate('bearer', {session: false}), db.updatePatient)
+// app.delete('/readings', passport.authenticate('bearer', {session: false}), db.deleteReading)
+// app.update('/readings',  passport.authenticate('bearer', {session: false}), db.updateReadings)
+app.post('/login', db.login)
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
