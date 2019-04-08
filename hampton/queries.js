@@ -380,20 +380,21 @@ async function deleteReading(req,res,next){
 async function login(req,res,next){
   const {database, readings, patients, users} = await init();
   const querySpec = {
-    query: "SELECT token FROM users where users.username=@username and users.password=@password",
+    query: "SELECT users.token FROM users where users.username=@username and users.password=@password",
     parameters: [
       {
         name: "@username",
         value: req.body["username"]
       },
       {
-        name: "@end",
+        name: "@password",
         value: req.body["password"]
       }
 
     ]
   };
   const { result: token } = await users.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
+
   if(token.length > 0){
     res.status(200)
         .json({user:token[0]})
