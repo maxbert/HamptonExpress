@@ -280,12 +280,12 @@ async function getPatient(req, res, next){
     query: 'SELECT * FROM patients where patients.Unique_ID=' + id + ' and patients.organisation="' + org + '"'
   };
   const queryReadings = {
-    query: 'select * from readings where readings.patient_id="' + id + '"' + ' and patients.organisation="' + org + '"'
+    query: 'select * from readings where readings.patient_id="' + id + '"' + ' and readings.organisation="' + org + '"'
   }
 
   const { result: metricList } = await patients.items.query(queryMetrics, { enableCrossPartitionQuery: true }).toArray();
   const { result: readingsList } = await readings.items.query(queryReadings, { enableCrossPartitionQuery: true }).toArray();
-
+  
   if(metricList.length > 0){
   metricList[0]["readings"]= readingsList
   res.status(200)
