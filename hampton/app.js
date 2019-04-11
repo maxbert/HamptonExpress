@@ -40,7 +40,7 @@ app.get('/column', passport.authenticate('bearer', { session: false }),db.getCol
 app.get('/patient', passport.authenticate('bearer', { session: false }),db.getPatient)
 app.get('/patients', passport.authenticate('bearer', { session: false }),db.getPatients)
 ////////
-// app.delete('/patients', passport.authenticate('bearer', {session: false}), db.deletePatient)
+ app.delete('/patient', passport.authenticate('bearer', {session: false}), db.deletePatient)
 // app.update('/patients', passport.authenticate('bearer', {session: false}), db.updatePatient)
 // app.delete('/readings', passport.authenticate('bearer', {session: false}), db.deleteReading)
 // app.update('/readings',  passport.authenticate('bearer', {session: false}), db.updateReadings)

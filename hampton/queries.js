@@ -285,7 +285,7 @@ async function getPatient(req, res, next){
 
   const { result: metricList } = await patients.items.query(queryMetrics, { enableCrossPartitionQuery: true }).toArray();
   const { result: readingsList } = await readings.items.query(queryReadings, { enableCrossPartitionQuery: true }).toArray();
-  
+
   if(metricList.length > 0){
   metricList[0]["readings"]= readingsList
   res.status(200)
@@ -366,7 +366,21 @@ async function updatePatient(req,res,next){
 }
 
 async function deletePatient(req,res,next){
+  var org = await getOrg(req.user.id)
+  var patient_id = req.body["id"]
+  const {database, readings, patients, users} = await init();
+  const querySpec = {
+    query:'SELECT patients.id, patients.partitionKey FROM patients where patients.Unique_ID=' + patient_id + ' and patients.organisation="' + org + '"' ,
+  };
 
+  const { result: patient } = await patients.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
+  console.log(patient)
+  const { result: deleted } = await patients.item(patient[0].id, patient[0].partitionKey).delete()
+
+  res.status(200)
+      .json({
+        status:'success'
+      })
 }
 
 async function updateReadings(req,res,next){
