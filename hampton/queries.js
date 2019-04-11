@@ -325,21 +325,33 @@ async function getPatients(req, res, next){
 async function importPatients(req, res, next){
   var org = await getOrg(req.user.id)
   var newPatients = req.body["patients"]
+  var skipped = []
+
+
   const {database, readings, patients, users} = await init();
 
   for(var i in newPatients){
-    newPatients[i]["organisation"] = org
-    newPatients[i]["partitionKey"] = org + "-" + newPatients[i]["Unique_ID"]
-    try{
-      const { body: upserted } = await patients.items.upsert(newPatients[i])
-    }catch(e){
-      console.log(e)
+    const querySpec = {
+      query:'SELECT * FROM patients where patients.Unique_ID=' + newPatients[i]["Unique_ID"] + ' and patients.organisation="' + org + '"' ,
+    };
+    const { result: patient } = await patients.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
+    if(patient.length > 0){
+      skipped.push(newPatients[i].Unique_ID)
+    }else{
+      newPatients[i]["organisation"] = org
+      newPatients[i]["partitionKey"] = org + "-" + newPatients[i]["Unique_ID"]
+      try{
+        const { body: upserted } = await patients.items.upsert(newPatients[i])
+      }catch(e){
+        console.log(e)
+      }
     }
   }
 
   res.status(200)
       .json({
-        status:"success"
+        status:"success",
+        skipped:skipped
       })
 
 }
@@ -373,10 +385,20 @@ async function deletePatient(req,res,next){
     query:'SELECT patients.id, patients.partitionKey FROM patients where patients.Unique_ID=' + patient_id + ' and patients.organisation="' + org + '"' ,
   };
 
-  const { result: patient } = await patients.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
-  console.log(patient)
-  const { result: deleted } = await patients.item(patient[0].id, patient[0].partitionKey).delete()
+  const queryReadings = {
+    query:'SELECT readings.id, readings.partitionKey FROM readings where readings.patient_id="' + patient_id + '" and readings.organisation="' + org + '"' ,
+  };
 
+  const { result: patient } = await patients.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
+  const { result: patientReadings } = await readings.items.query(queryReadings, { enableCrossPartitionQuery: true }).toArray();
+  console.log(patientReadings)
+  if(patient.length > 0){
+    const { result: deleted } = await patients.item(patient[0].id, patient[0].partitionKey).delete()
+  }
+  for(var i in patientReadings){
+    console.log(patientReadings[i])
+    await readings.item(patientReadings[i].id, patientReadings[i].partitionKey).delete()
+  }
   res.status(200)
       .json({
         status:'success'
