@@ -9,6 +9,11 @@ const {parse, stringify} = require('flatted/cjs');
 
 const client = new CosmosClient({ endpoint, auth: { masterKey } });
 
+var OLAPCube, cube;
+
+OLAPCube = require('lumenize').OLAPCube;
+cube = require('fs').readFileSync('./sprocs/cube.string', 'utf8')
+
 async function getReadings(req, res, next){
   const {database, readings, patients, users} = await init();
 
@@ -38,7 +43,6 @@ async function getReadings(req, res, next){
   var ids = []
   for (var i in itemDefList ) {
     const reading = itemDefList[i]
-    console.log(reading["patient_id"])
     if (!ids.includes(reading["patient_id"])) {
       ids.push(reading["patient_id"])
     }
@@ -184,15 +188,15 @@ async function getColumnsHelper(org){
   return Object.keys(itemDefList[0])
 }
 
-async function importReadingsHelper(){
-  var org = await getOrg(req.user.id)
-  const {database, readings, patients, users} = await init();
-  const querySpec = {
-    query: 'SELECT readings.partitionKey FROM readings where readings.organisation="' + org + '"',
-  };
-  const { result: itemDefList } = await readings.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
-  return itemDefList.map(pkey => pkey["partitionKey"])
-}
+// async function importReadingsHelper(){
+//   var org = await getOrg(req.user.id)
+//   const {database, readings, patients, users} = await init();
+//   const querySpec = {
+//     query: 'SELECT readings.partitionKey FROM readings where readings.organisation="' + org + '"',
+//   };
+//   const { result: itemDefList } = await readings.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
+//   return itemDefList.map(pkey => pkey["partitionKey"])
+// }
 
 async function getColumnsName(req, res, next){
   var org = await getOrg(req.user.id)
@@ -246,7 +250,7 @@ async function importReadings(req, res, next){
       //if(!currentReadings.includes(id + "-" + newReadings[i]["readings"][j]["days_before"])){
       newReadings[i]["readings"][j]["patient_id"] = id
       newReadings[i]["readings"][j]["organisation"] = org
-      newReadings[i]["readings"][j]["partitionKey"] = id + "-" + newReadings[i]["readings"][j]["date"] + "-" + org
+      newReadings[i]["readings"][j]["unique_key"] = id + "-" + newReadings[i]["readings"][j]["date"] + "-" + org
       dataToAdd.push(newReadings[i]["readings"][j])
     // }else{
     //   dataToUpdate.push(newReadings[i]["readings"][j])
@@ -339,7 +343,7 @@ async function importPatients(req, res, next){
       skipped.push(newPatients[i].Unique_ID)
     }else{
       newPatients[i]["organisation"] = org
-      newPatients[i]["partitionKey"] = org + "-" + newPatients[i]["Unique_ID"]
+      newPatients[i]["unique_key"] = newPatients[i].Unique_ID + '-' + org
       try{
         const { body: upserted } = await patients.items.upsert(newPatients[i])
       }catch(e){
@@ -382,22 +386,22 @@ async function deletePatient(req,res,next){
   var patient_id = req.body["id"]
   const {database, readings, patients, users} = await init();
   const querySpec = {
-    query:'SELECT patients.id, patients.partitionKey FROM patients where patients.Unique_ID=' + patient_id + ' and patients.organisation="' + org + '"' ,
+    query:'SELECT patients.id FROM patients where patients.Unique_ID=' + patient_id + ' and patients.organisation="' + org + '"' ,
   };
 
   const queryReadings = {
-    query:'SELECT readings.id, readings.partitionKey FROM readings where readings.patient_id="' + patient_id + '" and readings.organisation="' + org + '"' ,
+    query:'SELECT readings.id FROM readings where readings.patient_id="' + patient_id + '" and readings.organisation="' + org + '"' ,
   };
 
   const { result: patient } = await patients.items.query(querySpec, { enableCrossPartitionQuery: true }).toArray();
   const { result: patientReadings } = await readings.items.query(queryReadings, { enableCrossPartitionQuery: true }).toArray();
   console.log(patientReadings)
   if(patient.length > 0){
-    const { result: deleted } = await patients.item(patient[0].id, patient[0].partitionKey).delete()
+    const { result: deleted } = await patients.item(patient[0].id, org).delete()
   }
   for(var i in patientReadings){
     console.log(patientReadings[i])
-    await readings.item(patientReadings[i].id, patientReadings[i].partitionKey).delete()
+    await readings.item(patientReadings[i].id, org).delete()
   }
   res.status(200)
       .json({
@@ -409,9 +413,26 @@ async function updateReadings(req,res,next){
 
 }
 
-async function deleteReading(req,res,next){
+async function calculateDaysBefore(org){
 
+  const container = client.database("Hampton").container("readings");
+  const sprocId = "cube";
+
+  var filterQuery = 'select * from readings';
+  var cubeConfig = {groupBy: 'id', field: 'date', f: 'min'};
+  var memo = {cubeConfig: {groupBy: 'patient_id', field: 'date', f: 'min'}, filterQuery: 'select * from readings where readings.organisation="' + org + '"'};
+
+const {body: result} = await container.storedProcedure(sprocId).execute(memo, {partitionKey:org})
+//console.table(result.savedCube.cellsAsCSVStyleArray)
+var minDates = {}
+result.savedCube.cellsAsCSVStyleArray.forEach(cell => {
+  if(parseInt(cell[0])){
+  minDates[cell[0]] = cell[2]
 }
+})
+  return minDates
+}
+
 
 async function login(req,res,next){
   const {database, readings, patients, users} = await init();
@@ -460,8 +481,8 @@ module.exports = {
   getPatients : getPatients,
   login:login,
   deletePatient:deletePatient,
-  deleteReading:deleteReading,
   updateReadings:updateReadings,
   updatePatient:updatePatient,
+  calculateDaysBefore:calculateDaysBefore,
 
 }

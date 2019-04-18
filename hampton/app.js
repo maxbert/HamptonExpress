@@ -32,17 +32,17 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 var db = require('./queries');
 
-app.get('/readings', passport.authenticate('bearer', { session: false }), db.getReadings);
+app.get('/readings', passport.authenticate('bearer', { session: false }), db.getReadings);//done
 app.post('/readings', passport.authenticate('bearer', { session: false }), db.importReadings);
-app.post('/patients',passport.authenticate('bearer', { session: false }), db.importPatients);
+app.post('/patients',passport.authenticate('bearer', { session: false }), db.importPatients);//done
 app.get('/columns',passport.authenticate('bearer', { session: false }), db.getColumns)
 app.get('/column', passport.authenticate('bearer', { session: false }),db.getColumnsName)
-app.get('/patient', passport.authenticate('bearer', { session: false }),db.getPatient)
-app.get('/patients', passport.authenticate('bearer', { session: false }),db.getPatients)
+app.get('/patient', passport.authenticate('bearer', { session: false }),db.getPatient)//done
+app.get('/patients', passport.authenticate('bearer', { session: false }),db.getPatients)//done
 ////////
- app.delete('/patient', passport.authenticate('bearer', {session: false}), db.deletePatient)
+ app.delete('/patient', passport.authenticate('bearer', {session: false}), db.deletePatient)//done
 // app.update('/patients', passport.authenticate('bearer', {session: false}), db.updatePatient)
-// app.delete('/readings', passport.authenticate('bearer', {session: false}), db.deleteReading)
+app.delete('/readings', passport.authenticate('bearer', {session: false}), db.calculateDaysBefore)
 // app.update('/readings',  passport.authenticate('bearer', {session: false}), db.updateReadings)
 app.post('/login', db.login)
 
