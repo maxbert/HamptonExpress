@@ -39,11 +39,12 @@ app.get('/columns',passport.authenticate('bearer', { session: false }), db.getCo
 app.get('/column', passport.authenticate('bearer', { session: false }),db.getColumnsName)
 app.get('/patient', passport.authenticate('bearer', { session: false }),db.getPatient)//done
 app.get('/patients', passport.authenticate('bearer', { session: false }),db.getPatients)//done
+app.post('/users',  passport.authenticate('bearer', { session: false }), db.registerUser)
+app.delete('/users',  passport.authenticate('bearer', { session: false }), db.deleteUser)
 ////////
  app.delete('/patient', passport.authenticate('bearer', {session: false}), db.deletePatient)//done
-// app.update('/patients', passport.authenticate('bearer', {session: false}), db.updatePatient)
-app.delete('/readings', passport.authenticate('bearer', {session: false}), db.calculateDaysBefore)
-// app.update('/readings',  passport.authenticate('bearer', {session: false}), db.updateReadings)
+// app.put('/patients', passport.authenticate('bearer', {session: false}), db.updatePatient)
+// app.out('/readings',  passport.authenticate('bearer', {session: false}), db.updateReadings)
 app.post('/login', db.login)
 
 // catch 404 and forward to error handler

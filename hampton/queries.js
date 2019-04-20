@@ -643,6 +643,66 @@ async function login(req, res, next) {
 
 }
 
+async function registerUser(req, res, next) {
+  var org = await getOrg(req.user.id)
+  var username = req.body["username"]
+  var token = req.body["token"]
+  var skipped = []
+
+
+  const {database,readings,  patients,  users} = await init();
+
+  const querySpec = {query: 'SELECT * FROM users where users.username="' + req.body.username + '" and users.organisation="' + org + '"'};
+
+    const {result: user} = await users.items.query(querySpec, {enableCrossPartitionQuery: true  }).toArray();
+
+    if (user.length > 0) {
+      res.status(400)
+        .json({
+          message: "username already exists in database"
+        })
+        return
+    } else {
+
+
+
+        const {  body: upserted  } = await users.items.upsert({"username":username, "token":token, "organisation":org})
+        console.log(upserted)
+        res.status(201)
+          .json({
+            message: "user created"
+          })
+      }
+
+  }
+
+  async function deleteUser(req, res, next) {
+    const {
+      database,
+      readings,
+      patients,
+      users
+    } = await init();
+    const querySpec = {
+      query: 'SELECT users.id FROM patients where users.username="' + req.body.username  + '" and user.organisation="' + org + '"'
+    };
+
+
+    const {result: user  } = await user.items.query(querySpec, {  enableCrossPartitionQuery: true  }).toArray();
+
+    if (user.length > 0) {
+      const {
+        result: deleted
+      } = await patients.item(user[0].id, user[0].username).delete()
+    }
+
+    res.status(201)
+      .json({
+        status: 'deleted'
+      })
+  }
+
+
 async function init() {
   const database = await client.databases.createIfNotExists({
     id: databaseId
@@ -672,5 +732,7 @@ module.exports = {
   updateReadings: updateReadings,
   updatePatient: updatePatient,
   calculateDaysBefore: calculateDaysBefore,
+  registerUser: registerUser,
+  deleteUser: deleteUser,
 
 }
